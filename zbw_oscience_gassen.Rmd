@@ -1,0 +1,257 @@
+---
+title: "Making Open Science Matter: Wie können wir die Wiederverwendbarkeit und Wirkung von Forschung steigern?"
+subtitle: "ZBW Symposium: Open Science – Forschungstransparenz in den Wirtschaftswissenschaften"
+author: "Joachim Gassen"
+institute: "HU Berlin / TRR 266 Accounting for Transparency"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+fontsize: "9pt"
+output: 
+  beamer_presentation: 
+    latex_engine: xelatex # pdflatex creates rastered fonts
+    slide_level: 3
+classoption: "aspectratio=169"
+
+        
+header-includes:
+- \usepackage{booktabs}
+- \usepackage{graphicx}
+- \usepackage{xcolor}
+- \usepackage{array}
+- \usepackage{longtable}
+- \usepackage{multirow}
+- \usepackage{wrapfig}
+- \usepackage{float}
+- \usepackage{colortbl}
+- \usepackage{pdflscape}
+- \usepackage{tabu}
+- \usepackage{threeparttable}
+- \usepackage{threeparttablex}
+- \usepackage[normalem]{ulem}
+- \usepackage{makecell}
+- \setbeamertemplate{itemize subitem}{-}
+- \input{templates/beamer_theme_trr266_16x9.sty}
+---
+
+
+```{r setup, include=FALSE, cache=F, message=F, warning=F, results="hide"}
+knitr::opts_chunk$set(
+  cache = FALSE, echo = FALSE, message = FALSE, warning = FALSE
+)
+library(tidyverse)
+library(kableExtra)
+library(tufte)
+library(lubridate)
+library(modelsummary)
+devtools::source_url(
+  "https://raw.githubusercontent.com/trr266/treat/main/code/R/theme_trr.R"
+)
+
+smp <- read_csv("data/talk_smp.csv", col_types = cols()) 
+
+desc_smp <- smp %>% select(url, dloads) %>% distinct()
+
+reg_smp <- smp %>%
+  filter(cites >= 0, dloads >= 0) %>%
+  mutate(year = year(date)) %>% 
+  group_by(journal) %>% filter(n() >= 10) %>% ungroup() %>%
+  mutate(journal = factor(
+    journal, c(
+      "American Economic Review", 
+      "American Economic Journal: Applied Economics",
+      "American Economic Journal: Economic Policy",
+      "American Economic Journal: Microeconomics",
+      "American Economic Journal: Macroeconomics",
+      "Journal of Economic Perspectives",
+      "Journal of Economic Literature"
+    ))
+  ) %>%
+  filter(!is.na(journal), !is.na(year))
+
+
+```
+
+
+### Open Science
+
+Open Science is the practice of science in such a way that others can collaborate and contribute, where research data, lab notes and other research processes are freely available, under terms that enable reuse, redistribution and reproduction of the research and its underlying data and methods.
+
+`r quote_footer('--- FOSTER, https://www.fosteropenscience.eu/')`
+
+
+### Was machen wir im Open Science Data Center vom TRR 266?
+
+\begin{center}
+\includegraphics[width=0.5\textwidth]{media/osdc.png} \\
+https://www.accounting-for-transparency.de https://github.com/trr266
+\end{center}
+
+
+### Was heißt das praktisch?
+
+- Open Science beschreibt einen "academic workflow"
+
+- Wesentliche Auswirkungen auf
+  - Arbeitsorganisation in Teams,
+  - Verwendete Tools,
+  - Datenmanagement,
+  - Programmierung und
+  - Dokumentation
+  
+- Idealer- und fast notwendigerweise projektbegleitend  
+
+
+### Was sind die Roadblocks auf der Angebotsseite?
+
+- Fehlendes Know-how
+- Angst vor Fehlern
+- Überhöhte Ansprüche
+- Hierarchien in Teams
+- Mangelnde Maintenance
+- Lizensierungsprobleme
+- Datenschutz
+- (Schutz des "geistigen Eigentums")
+
+
+### Was sind die Roadblocks auf der Nachfrageseite?
+
+- Großes Interesse an wiederverwertbaren Daten und Tools aber eher geringes Interesse an spezifischen Projektmaterialien
+- Mangelnde Interoperabilität der Daten
+- Schwer auffindbare Inhalte
+- Fehlendes Know-how
+- Überhöhte Ansprüche (insb. hinsichtlich support)
+
+
+### Open Science Impact
+
+\begin{center}
+Wie steht es nun um die Wirkung von Open Science?
+\end{center}
+
+
+### Download numbers for AEA Replication Packages on OpenICPSR
+
+```{r Download, fig.width=6,fig.height=3}
+ggplot(desc_smp, aes(x = dloads)) + geom_histogram(fill = col_trr266_iceblue) + 
+  labs(x = "Number of Downloads", y = "", title = "") +
+  theme_minimal() + theme_trr()
+```
+
+
+### Replication packages werden im Schnitt etwa 75 mal runtergeladen
+
+```{r DownloadLog, fig.width=6,fig.height=3}
+ggplot(desc_smp, aes(x = dloads)) + geom_histogram(fill = col_trr266_iceblue) + 
+  labs(x = "Number of Downloads", y = "", title = "") +
+  scale_x_log10() + 
+  theme_minimal() + theme_trr()
+```
+
+
+### Downloadzahlen korrelieren klar mit dem Impact des Papers
+
+```{r DCCorr, fig.width=6,fig.height=3}
+ggplot(reg_smp, aes(x = log(dloads), y = log(cites))) + geom_point(size = 0.2, alpha = 0.2) +  geom_smooth() + theme_trr()
+```
+
+
+### Keine Daten ohne Regression ;-)
+
+```{r Regression}
+mod <- fixest::feols(log(dloads) ~ log(cites) + journal | factor(year(date)), data = reg_smp) 
+gof_map <-list(
+  list("raw" = "nobs", "clean" = "N", "fmt" = function(x) format(round(x, 0), big.mark=",")),
+  list("raw" = "adj.r.squared", "clean" = "Adj. R²", "fmt" = 3)
+)
+coef_map <- c(
+  "log(Citations)",
+  "American Economic Journal: Applied Economics",
+  "American Economic Journal: Economic Policy",
+  "American Economic Journal: Microeconomics",
+  "American Economic Journal: Macroeconomics",
+  "Journal of Economic Perspectives",
+  "Journal of Economic Literature"
+)
+names(coef_map) <-names(coef(mod))
+options(modelsummary_format_numeric_latex = "plain")
+modelsummary(
+  models = list("log(Downloads)" = mod), coef_map = coef_map, 
+  output = "kableExtra",
+  estimate = "{estimate}{stars} [{conf.low}, {conf.high}]", statistic = NULL,
+  stars = c('*' = .1, '**' = .05, '***' =  0.01),
+  gof_map = gof_map,
+  add_rows = tibble(
+    c1 = c("Standard Errors",  "Fixed Effects"),
+    c2 = c("Clustered by Publication Year", "Publication Year")
+  )
+)
+```
+
+
+### Persönliche Mikroevidenz: Ein Replication Package
+
+\begin{center}
+\includegraphics[height=0.7\textheight]{media/imp_use_fai.png} \\
+Replication code for Cascino et al. (TAR, 2021)
+\end{center}
+
+
+### Zum Vergleich: Ein (nieschiges) R Package
+
+\begin{center}
+\includegraphics[height=0.7\textheight]{media/imp_expandar.png} \\
+https://github.com/joachim-gassen/expandar
+\end{center}
+
+
+### Ein "Role Model"
+
+\begin{center}
+\includegraphics[height=0.7\textheight]{media/arel-bundock.png} \\
+https://github.com/vincentarelbundock
+\end{center}
+
+
+### Datenmarketing...
+
+\begin{center}
+\includegraphics[height=0.7\textheight]{media/insol.png} \\
+https://www.accounting-for-transparency.de/insol
+\end{center}
+
+
+### Ein Beispiel aus einen anderen Feld
+
+\begin{center}
+\includegraphics[height=0.7\textheight]{media/verena.png} \\
+https://www.viralemergence.org/blog/building-a-global-atlas-of-wildlife-disease-data
+\end{center}
+
+
+### Wo stehen wir?
+
+\begin{center}
+Wieviele Unternehmen gibt es in Deutschland?
+\end{center}
+
+### Zusammenfassung
+
+- Open Science is here to stay: Reproduzier- und Replizierbarkeit von Forschung sind zentrale Bestandteile des wissenschaftlichen Fortschritts
+- Aber wir sollten dort nicht stoppen: Wirklichen Impact entfaltet Open Science immer dann, wenn andere auf den Ergebnissen und Methoden bisheriger Forschung aufbauen können
+- Open Collaboration bringt einen wahren Performance Boost
+- Sehr wichtig und leider schwierig: Dementsprechende Leistungen sind bei Karriereentscheidungen zu werten (Forschung oder Service?)
+
+
+### Practice what you preach
+
+\begin{center}
+\includegraphics[height=0.7\textheight]{media/repo_qr_code.png} \\
+https://github.com/joachim-gassen/zbw\_oscience\_talk
+\end{center}
+
+
+### Ein paar Literaturtipps
+
+- Christensen, Freese and Miguel (2019): Transparent and Reproducible Social Science Research: https://www.ucpress.edu/book/9780520296954/transparent-and-reproducible-social-science-research 
+- Gentzkow and Shapiro (2014): Code and data for the social sciences:
+a practitioner’s guide, https://web.stanford.edu/~gentzkow/research/CodeAndData.pdf (a nice and fun intro text)
+- Wilson, Bryan, Cranston, Kitzes, Nederbragt and Teal (2017): Good enough practices in scientific computing, PLOS Computational Biology 13(6): 1-20, https://doi.org/10.1371/journal.pcbi.1005510 (a pragmatic approach for the rest of us)
